@@ -1,0 +1,54 @@
+# Publishes the website to GitHub Pages on every push to main.
+# One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+name: Deploy website to GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:   # adds a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Get the files
+        uses: actions/checkout@v4
+
+      # Works whether the files were uploaded at the top level or inside a folder
+      # (e.g. "jayanti-devi-mandir-website/index.html").
+      - name: Find the website folder
+        id: site
+        run: |
+          f=$(find . -name index.html -not -path "./.git/*" -not -path "*/node_modules/*" \
+              | awk '{ print gsub("/", "/"), $0 }' | sort -n | head -1 | cut -d' ' -f2-)
+          if [ -z "$f" ]; then
+            echo "::error::No index.html found in this repository. Upload the website files first."
+            exit 1
+          fi
+          dir=$(dirname "$f")
+          echo "Publishing folder: $dir"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Package the website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.site.outputs.dir }}
+
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
